@@ -41,14 +41,21 @@ void *crack(void *arg)
     struct crypt_data data;
     data.initialized = 0;
 
+    // Print which thread is working on which portion of the search space
+    printf("Thread %ld working on range: %c%c to %c%c\n", pthread_self(), 'A' + slice->start, 'A', 'A' + slice->end, 'Z');
+
     for (i = 'A' + slice->start; i <= 'A' + slice->end; i++)
     {
         for (j = 'A'; j <= 'Z'; j++)
         {
             for (k = 0; k <= 99; k++)
             {
+                // Generate the candidate password
                 sprintf(plain, "%c%c%02d", i, j, k);
                 snprintf(salt_and_plain, sizeof(salt_and_plain), "%s%s", salt, plain);
+
+                // Print the password being tested by this thread
+                printf("Thread %ld testing: %s\n", pthread_self(), plain);
 
                 enc = crypt_r(plain, salt, &data);
 
@@ -56,12 +63,12 @@ void *crack(void *arg)
                 pthread_mutex_lock(&mutex);
                 {
                     count++;
-                    if (strcmp(encrypted, enc) == 0) // check if the decrypted password the user input encrypted password is same
+                    if (strcmp(encrypted, enc) == 0) // Check if the decrypted password matches the encrypted password
                     {
-                        printf("#%-8dPassword found!\n", count); // if same the password is found
-                        fprintf(output_file, "#%-8dPassword found!\n", count);
+                        printf("Thread %ld found the password: %s\n", pthread_self(), plain); // if the password matches
+                        fprintf(output_file, "Thread %ld found the password: %s\n", pthread_self(), plain); // Write to file
                         strncpy(password, plain, sizeof(password) - 1);
-                        password_found = 1; // change value to 1
+                        password_found = 1; // Change value to 1 when password is found
                     }
                 }
                 pthread_mutex_unlock(&mutex);
@@ -75,8 +82,10 @@ void *crack(void *arg)
         }
     }
 
+    printf("Thread %ld finished its task.\n", pthread_self()); // Indicate the thread is done
     pthread_exit(NULL);
 }
+
 
 int main(int argc, char *argv[])
 {

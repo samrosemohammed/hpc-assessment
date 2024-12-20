@@ -1,0 +1,5 @@
+#12387   Password found!
+Encrypted password= $6$ab$QEQGFJYwAvbiiNjV/gNxqYuh7Ff5FxPWcYMPr4dbm2PU4dEhv603B.k0cA0AIRvqEW/igyqVFKFHsJ40HQinL.
+Password:BE77
+12390 solutions explored
+Elapsed time: 43.6516 seconds

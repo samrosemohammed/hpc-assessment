@@ -24,32 +24,26 @@ void free_matrix(double **matrix, int rows) {
 }
 
 // Function to read matrices from a file
-void read_matrices(const char *filename) {
-    FILE *file = fopen(filename, "r");
-    if (!file) {
-        perror("Error opening file");
-        exit(EXIT_FAILURE);
-    }
-
+int read_matrices(FILE *file) {
     // Read dimensions of Matrix A
-    fscanf(file, "%d %d", &rowsA, &colsA);
+    if (fscanf(file, "%d %d", &rowsA, &colsA) != 2) return 0;
     A = allocate_matrix(rowsA, colsA);
     for (int i = 0; i < rowsA; i++) {
         for (int j = 0; j < colsA; j++) {
-            fscanf(file, "%lf", &A[i][j]);
+            if (fscanf(file, "%lf", &A[i][j]) != 1) return 0;
         }
     }
 
     // Read dimensions of Matrix B
-    fscanf(file, "%d %d", &rowsB, &colsB);
+    if (fscanf(file, "%d %d", &rowsB, &colsB) != 2) return 0;
     B = allocate_matrix(rowsB, colsB);
     for (int i = 0; i < rowsB; i++) {
         for (int j = 0; j < colsB; j++) {
-            fscanf(file, "%lf", &B[i][j]);
+            if (fscanf(file, "%lf", &B[i][j]) != 1) return 0;
         }
     }
 
-    fclose(file);
+    return 1;
 }
 
 // Function to compute part of the result matrix in a thread
@@ -66,23 +60,19 @@ void *multiply(void *arg) {
     return NULL;
 }
 
-// Function to write the resulting matrix to a file
-void write_result(const char *filename) {
-    FILE *file = fopen(filename, "w");
-    if (!file) {
-        perror("Error opening file");
-        exit(EXIT_FAILURE);
-    }
-
-    fprintf(file, "%d %d\n", rowsC, colsC);
-    for (int i = 0; i < rowsC; i++) {
-        for (int j = 0; j < colsC; j++) {
-            fprintf(file, "%.6lf ", C[i][j]);
+// Function to write the resulting matrix or error to a file
+void write_result(FILE *file, const char *error_message) {
+    if (error_message) {
+        fprintf(file, "%s\n", error_message);
+    } else {
+        fprintf(file, "%d %d\n", rowsC, colsC);
+        for (int i = 0; i < rowsC; i++) {
+            for (int j = 0; j < colsC; j++) {
+                fprintf(file, "%.6lf ", C[i][j]);
+            }
+            fprintf(file, "\n");
         }
-        fprintf(file, "\n");
     }
-
-    fclose(file);
 }
 
 // Main function
@@ -93,43 +83,58 @@ int main(int argc, char *argv[]) {
     }
 
     num_threads = atoi(argv[2]);
-    read_matrices(argv[1]);
-
-    // Validate if multiplication is possible
-    if (colsA != rowsB) {
-        fprintf(stderr, "Error: Matrices cannot be multiplied. Dimensions do not match.\n");
-        free_matrix(A, rowsA);
-        free_matrix(B, rowsB);
+    FILE *file = fopen(argv[1], "r");
+    if (!file) {
+        perror("Error opening file");
         exit(EXIT_FAILURE);
     }
 
-    // Set dimensions for the result matrix
-    rowsC = rowsA;
-    colsC = colsB;
-    C = allocate_matrix(rowsC, colsC);
-
-    // Adjust thread count if necessary
-    if (num_threads > rowsC) {
-        num_threads = rowsC;
+    FILE *result_file = fopen("result.txt", "w");
+    if (!result_file) {
+        perror("Error opening result file");
+        exit(EXIT_FAILURE);
     }
 
-    pthread_t threads[num_threads];
-    int thread_ids[num_threads];
-    for (int i = 0; i < num_threads; i++) {
-        thread_ids[i] = i;
-        pthread_create(&threads[i], NULL, multiply, &thread_ids[i]);
+    while (read_matrices(file)) {
+        // Validate if multiplication is possible
+        if (colsA != rowsB) {
+            write_result(result_file, "Error: Matrices cannot be multiplied. Dimensions do not match.");
+            free_matrix(A, rowsA);
+            free_matrix(B, rowsB);
+            continue;  // Skip to next matrix pair
+        }
+
+        // Set dimensions for the result matrix
+        rowsC = rowsA;
+        colsC = colsB;
+        C = allocate_matrix(rowsC, colsC);
+
+        // Adjust thread count if necessary
+        if (num_threads > rowsC) {
+            num_threads = rowsC;
+        }
+
+        pthread_t threads[num_threads];
+        int thread_ids[num_threads];
+        for (int i = 0; i < num_threads; i++) {
+            thread_ids[i] = i;
+            pthread_create(&threads[i], NULL, multiply, &thread_ids[i]);
+        }
+
+        for (int i = 0; i < num_threads; i++) {
+            pthread_join(threads[i], NULL);
+        }
+
+        write_result(result_file, NULL);  // Write the result matrix
+
+        // Free dynamically allocated memory
+        free_matrix(A, rowsA);
+        free_matrix(B, rowsB);
+        free_matrix(C, rowsC);
     }
 
-    for (int i = 0; i < num_threads; i++) {
-        pthread_join(threads[i], NULL);
-    }
-
-    write_result("result.txt");
-
-    // Free dynamically allocated memory
-    free_matrix(A, rowsA);
-    free_matrix(B, rowsB);
-    free_matrix(C, rowsC);
+    fclose(file);
+    fclose(result_file);
 
     return 0;
 }
